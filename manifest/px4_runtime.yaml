@@ -1,5 +1,5 @@
 package_name: ros-jazzy-xgc2-gz-harmonic-px4-1-16
-debian_version: 1.16.2-12
+debian_version: 1.16.2-13
 px4_repo: https://github.com/PX4/PX4-Autopilot.git
 px4_tag: v1.16.2
 ros_distro: jazzy
