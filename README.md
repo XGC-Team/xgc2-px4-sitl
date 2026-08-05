@@ -4,8 +4,8 @@ This repository builds installable Debian packages for selected PX4 SITL
 runtime lines. It is intentionally small: it does not store PX4 source trees,
 PX4 binaries, Gazebo binaries, or generated `.deb` artifacts. GitHub Actions
 clones the configured PX4 tag, builds in the target ROS/Ubuntu environment,
-extracts only the runtime files, packages them as `.deb`, and can publish them
-to a self-hosted APT repository.
+extracts only the runtime files, packages them as `.deb`, and uploads them as
+trusted artifacts for the central XGC2 release train.
 
 ## Branches And Packages
 
@@ -50,8 +50,8 @@ the Gazebo package is the normal complete simulator install.
 
 ## CI Build
 
-The `build-runtime` workflow runs on push, manual dispatch, and a weekly
-schedule. For each branch it:
+The centrally dispatched `release` workflow prepares one runtime line at a
+time. For each branch it:
 
 1. Reads `manifest/px4_runtime.yaml`.
 2. Builds on native `amd64` and `arm64` GitHub-hosted runners.
@@ -64,76 +64,35 @@ schedule. For each branch it:
 9. Builds the Debian package.
 10. Installs the package inside the build container.
 11. Verifies package discovery with `rospack` or `ros2 pkg prefix`.
-12. Uploads the `.deb` files as GitHub Actions artifacts.
-13. Publishes to a self-hosted APT repository if publishing secrets are set.
+12. Uploads the `.deb` files and build manifests as GitHub Actions artifacts.
+13. Returns those trusted artifacts to the central release train for staging
+    and atomic promotion.
 
-If APT publishing secrets are missing, CI still builds and uploads artifacts;
-the publish step is skipped.
+This product workflow never publishes directly to the production APT server.
 
-## Connect Your APT Repository
+## Central APT Publication
 
-The workflow publishes over SSH to an APT repository server that accepts a forced
-command such as `publish focal` or `publish noble`. Configure these GitHub
-repository secrets in the package repository:
+Production publication is owned by the protected `xgc2-apt-production`
+environment in `lxk36/xgc2-devops`. The central `release-orchestrator` consumes
+this repository's trusted build artifacts, stages the complete dependency set,
+and promotes one verified release train atomically.
 
-```text
-APT_REPO_HOST
-APT_REPO_PORT
-APT_REPO_SSH_KEY
-APT_REPO_KNOWN_HOSTS
-```
+Do not add APT publishing credentials, SSH deploy keys, private keys, or server
+host-key configuration to this product repository or its GitHub Actions
+workflows. Product repositories build and attest artifacts only; production
+release credentials belong exclusively to the protected central release
+environment.
 
-`APT_REPO_HOST` is the SSH host name or IP address reachable from GitHub
-Actions. `APT_REPO_PORT` is the SSH publish port. `APT_REPO_SSH_KEY` is the
-private deploy key. `APT_REPO_KNOWN_HOSTS` pins the SSH server host key for
-strict host checking.
+Authoritative release documentation:
 
-`APT_REPO_SSH_KEY` must be the complete multi-line private key:
-
-```text
------BEGIN OPENSSH PRIVATE KEY-----
-...
------END OPENSSH PRIVATE KEY-----
-```
-
-Do not paste the `.pub` public key into `APT_REPO_SSH_KEY`.
-
-Generate `APT_REPO_KNOWN_HOSTS` with the same host and port that GitHub Actions
-will use:
-
-```bash
-APT_REPO_HOST=apt-ssh.example.com
-APT_REPO_PORT=2222
-
-ssh-keyscan -t ed25519 -p "$APT_REPO_PORT" "$APT_REPO_HOST" > apt_known_hosts
-cat apt_known_hosts
-```
-
-Paste the full output into `APT_REPO_KNOWN_HOSTS`. Correct value:
-
-```text
-[apt-ssh.example.com]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...
-```
-
-Wrong value:
-
-```text
-AAAAC3NzaC1lZDI1NTE5AAAA...
-```
-
-If `APT_REPO_HOST` is an IP address, generate the line with that IP address. If
-it is a domain name, generate the line with that domain name. Do not use
-`127.0.0.1` unless GitHub Actions will actually connect to `127.0.0.1`.
-
-Use the manual `check-apt-ssh` workflow to verify the secrets before running a
-full package build. It only runs the server `health` command and does not upload
-or publish packages.
+- [APT repository and central release-train contract](https://github.com/lxk36/xgc2-devops/blob/master/platforms/apt-repo/README.md#central-release-train-settings)
+- [GitHub Actions release orchestrator](https://github.com/lxk36/xgc2-devops/blob/master/.github/workflows/release-orchestrator.yml)
 
 ## Install From Your APT Repository
 
-After CI publishes successfully, clients install through the public HTTPS APT
-endpoint of your own repository. Replace `APT_BASE_URL` with your repository
-base URL.
+After the central release train publishes successfully, clients install through
+the public HTTPS APT endpoint. Replace `APT_BASE_URL` with the deployment's
+repository base URL.
 
 Install the repository signing key:
 
@@ -279,6 +238,8 @@ build inputs.
 
 ## Notes
 
-This repository is a package build and publication wrapper. It is not a PX4
-source fork, not a binary artifact store, and not an APT server. Use your own APT
-repository URL and GitHub Secrets when publishing from a fork.
+This repository is a package build and release-preparation wrapper. It is not a
+PX4 source fork, not a binary artifact store, and not an APT server. XGC2
+production publication remains owned by the central release train; forks must
+establish a separate release boundary and must not reuse XGC2 production
+credentials.
