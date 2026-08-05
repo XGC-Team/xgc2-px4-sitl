@@ -129,69 +129,28 @@ For lower-level debugging, run the stages directly:
   --output-dir debs
 ```
 
-## Self-Hosted APT Publishing
+## Central APT Publication
 
-The `build-runtime` workflow can publish `.deb` artifacts directly to the
-self-hosted XGC2 APT repository over SSH. Publishing is enabled only when these
-repository secrets exist:
+The `release` workflow builds, installs, checks, and uploads trusted `.deb` and
+manifest artifacts. It does not publish directly to the production APT server.
+The protected `xgc2-apt-production` environment in `lxk36/xgc2-devops` owns
+production publication: its central `release-orchestrator` stages the complete
+dependency set and atomically promotes one verified release train.
 
-```bash
-APT_REPO_HOST
-APT_REPO_PORT
-APT_REPO_SSH_KEY
-APT_REPO_KNOWN_HOSTS
-```
+Do not add APT publishing credentials, SSH deploy keys, private keys, or server
+host-key configuration to this product repository or its GitHub Actions
+workflows. Product repositories build and attest artifacts only; production
+release credentials belong exclusively to the protected central release
+environment.
 
-`APT_REPO_HOST` is the SSH publish host. `APT_REPO_PORT` is the container SSH
-publish port. `APT_REPO_SSH_KEY` is the private half of the CI deploy key whose
-public half is installed in the APT server `authorized_keys`.
-`APT_REPO_SSH_KEY` must be the full multi-line private key, including these
-first and last lines:
+Authoritative release documentation:
 
-```text
------BEGIN OPENSSH PRIVATE KEY-----
-...
------END OPENSSH PRIVATE KEY-----
-```
-
-Do not paste the `.pub` public key into `APT_REPO_SSH_KEY`.
-`APT_REPO_KNOWN_HOSTS` is the pinned SSH host key line for strict host checking.
-It proves to CI that the SSH endpoint is the expected APT server before any
-package data is sent.
-
-Create `APT_REPO_KNOWN_HOSTS` from the same host and port that CI will use:
-
-```bash
-APT_REPO_HOST=server.example.com
-APT_REPO_PORT=2222
-
-ssh-keyscan -p "$APT_REPO_PORT" "$APT_REPO_HOST" > apt_known_hosts
-cat apt_known_hosts
-```
-
-Paste the full `cat apt_known_hosts` output into the GitHub secret. Copy the
-whole line, including `[host]:port`, `ssh-ed25519`, and the long key value. Do
-not paste only the `AAAAC3...` part.
-
-Correct `APT_REPO_KNOWN_HOSTS` value:
-
-```text
-[server.example.com]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...
-```
-
-Wrong value:
-
-```text
-AAAAC3NzaC1lZDI1NTE5AAAA...
-```
-
-If `APT_REPO_HOST` is an IP address, generate the line with that IP address. If
-it is a domain name, generate the line with that domain name. Do not use
-`127.0.0.1` unless GitHub Actions will connect to `127.0.0.1`.
+- [APT repository and central release-train contract](https://github.com/lxk36/xgc2-devops/blob/master/platforms/apt-repo/README.md#central-release-train-settings)
+- [GitHub Actions release orchestrator](https://github.com/lxk36/xgc2-devops/blob/master/.github/workflows/release-orchestrator.yml)
 
 ## CI
 
-The `build-runtime` GitHub Actions workflow:
+The `release` GitHub Actions workflow:
 
 1. Reads `manifest/px4_runtime.yaml`.
 2. Builds in parallel for `amd64` and `arm64` on native GitHub-hosted runners.
@@ -204,10 +163,8 @@ The `build-runtime` GitHub Actions workflow:
 9. Builds `ros-jazzy-xgc2-px4-sitl-1-16` and `ros-jazzy-xgc2-gz-harmonic-px4-1-16`.
 10. Installs the `.deb` inside the container.
 11. Checks `px4_sitl_runtime_1_16` and `px4_gz_sim_1_16` with `ros2 pkg prefix`.
-12. Uploads the `.deb` as a workflow artifact named by Debian architecture.
-13. Publishes to the self-hosted APT repository when these repository secrets
-    are configured: `APT_REPO_HOST`, `APT_REPO_PORT`, `APT_REPO_SSH_KEY`, and
-    `APT_REPO_KNOWN_HOSTS`.
-
-If the APT repository secrets are absent, CI still builds and uploads artifacts
-without publishing.
+12. Uploads the `.deb` and build manifest as workflow artifacts named by Debian
+    architecture.
+13. Returns those trusted artifacts to the central release train for staging
+    and atomic promotion; this product workflow does not hold production APT
+    credentials or publish directly.
