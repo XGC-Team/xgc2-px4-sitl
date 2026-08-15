@@ -41,7 +41,7 @@ ownership:
   - /opt/ros/noetic/lib/px4_sitl_1_14
   - /opt/ros/noetic/lib/gazebo_sim_px4_1_14
 release:
-  repository: lxk36/xgc2-px4-sitl
+  repository: XGC-Team/xgc2-px4-sitl
   ref: v1.14-noetic
   workflow: release.yml
   apt_versions:
