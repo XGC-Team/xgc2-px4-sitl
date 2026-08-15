@@ -39,7 +39,7 @@ ownership:
   - /opt/ros/jazzy/lib/px4_sitl_runtime_1_16
   - /opt/ros/jazzy/lib/px4_gz_sim_1_16
 release:
-  repository: lxk36/xgc2-px4-sitl
+  repository: XGC-Team/xgc2-px4-sitl
   ref: v1.16-jazzy
   workflow: release.yml
   apt_versions:
