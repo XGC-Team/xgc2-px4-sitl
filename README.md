@@ -100,7 +100,8 @@ Gazebo Sim Harmonic runtime:
 
 ## Local Build
 
-The normal local path builds inside the official ROS Jazzy image:
+The normal local path builds inside the versioned XGC2 Noble/Jazzy full build
+image:
 
 ```bash
 .xgc2/scripts/build_runtime_deb_in_docker.sh \
@@ -108,7 +109,14 @@ The normal local path builds inside the official ROS Jazzy image:
   --output-dir debs
 ```
 
-The script pulls `ros:jazzy-ros-core-noble`, clones PX4 v1.16.2, initializes PX4 submodules, installs explicit build tooling, runs PX4's `Tools/setup/ubuntu.sh --no-nuttx` when available, builds `px4_sitl_default`, extracts PX4 runtime files and Gazebo Sim Harmonic assets, builds the Debian package, installs it in the same disposable container, and verifies all three ROS 2 packages with `ros2 pkg prefix`.
+The script pulls
+`ghcr.io/xgc-team/xgc2-images/xgc2-build-noble-full-jazzy:1.0.0`,
+verifies that its preinstalled PX4 system and Python inputs are complete, clones
+PX4 v1.16.2, initializes PX4 submodules, builds `px4_sitl_default`, extracts PX4
+runtime files and Gazebo Sim Harmonic assets, builds the Debian package, installs
+that local package in the same disposable container, and verifies all three ROS
+2 packages with `ros2 pkg prefix`. Product CI never runs PX4's APT/Python setup
+script.
 
 For lower-level debugging, run the stages directly:
 
@@ -154,14 +162,15 @@ The `release` GitHub Actions workflow:
 
 1. Reads `manifest/px4_runtime.yaml`.
 2. Builds in parallel for `amd64` and `arm64` on native GitHub-hosted runners.
-3. Pulls `ros:jazzy-ros-core-noble`.
+3. Pulls the versioned XGC2 Noble/Jazzy full build image.
 4. Runs the full build inside a disposable Docker container.
 5. Clones PX4-Autopilot at the configured tag and initializes all PX4 submodules.
-6. Runs PX4's Ubuntu dependency setup when present.
+6. Verifies the image-provided PX4 system and Python dependencies without
+   installing or downloading a toolchain.
 7. Builds `px4_sitl_default`.
 8. Extracts PX4 runtime files and `Tools/simulation/gz`.
 9. Builds `ros-jazzy-xgc2-px4-sitl-1-16` and `ros-jazzy-xgc2-gz-harmonic-px4-1-16`.
-10. Installs the `.deb` inside the container.
+10. Installs the local `.deb` inside the container.
 11. Checks `px4_sitl_runtime_1_16` and `px4_gz_sim_1_16` with `ros2 pkg prefix`.
 12. Uploads the `.deb` and build manifest as workflow artifacts named by Debian
     architecture.

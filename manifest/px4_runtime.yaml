@@ -14,4 +14,4 @@ gazebo_runtime_prefix: /opt/ros/jazzy/share/px4_gz_sim_1_16
 build_target: px4_sitl_default
 px4_cmake_build_type: RelWithDebInfo
 optimization_level: O3
-docker_image: ros:jazzy-ros-core-noble
+docker_image: ghcr.io/xgc-team/xgc2-images/xgc2-build-noble-full-jazzy:1.0.0
