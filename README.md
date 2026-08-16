@@ -111,12 +111,12 @@ image:
 
 The script pulls
 `ghcr.io/xgc-team/xgc2-images/xgc2-build-noble-full-jazzy:1.0.0`,
-verifies that its preinstalled PX4 system and Python inputs are complete, clones
-PX4 v1.16.2, initializes PX4 submodules, builds `px4_sitl_default`, extracts PX4
-runtime files and Gazebo Sim Harmonic assets, builds the Debian package, installs
-that local package in the same disposable container, and verifies all three ROS
-2 packages with `ros2 pkg prefix`. Product CI never runs PX4's APT/Python setup
-script.
+clones the pinned PX4 v1.16.2 source, initializes PX4 submodules, installs its
+additional build-only dependencies and runs the setup script shipped by that
+pinned source inside the disposable container. It then builds
+`px4_sitl_default`, extracts PX4 runtime files and Gazebo Sim Harmonic assets,
+builds the Debian package, installs that local package, and verifies all three
+ROS 2 packages with `ros2 pkg prefix`.
 
 For lower-level debugging, run the stages directly:
 
@@ -165,8 +165,8 @@ The `release` GitHub Actions workflow:
 3. Pulls the versioned XGC2 Noble/Jazzy full build image.
 4. Runs the full build inside a disposable Docker container.
 5. Clones PX4-Autopilot at the configured tag and initializes all PX4 submodules.
-6. Verifies the image-provided PX4 system and Python dependencies without
-   installing or downloading a toolchain.
+6. Runs the pinned PX4 source's Ubuntu dependency setup inside the disposable
+   build container.
 7. Builds `px4_sitl_default`.
 8. Extracts PX4 runtime files and `Tools/simulation/gz`.
 9. Builds `ros-jazzy-xgc2-px4-sitl-1-16` and `ros-jazzy-xgc2-gz-harmonic-px4-1-16`.

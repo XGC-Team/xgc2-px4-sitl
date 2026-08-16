@@ -65,52 +65,53 @@ docker run --rm \
   bash -lc '
     set -euo pipefail
 
-    # PX4 build dependencies belong in the approved XGC2 full build image.
-    # Fail with the exact missing image inputs instead of mutating the build
-    # environment with the PX4 apt/pip bootstrap script.
-    required_packages=(
-      astyle bc build-essential ccache cmake cppcheck cppzmq-dev file g++ gcc
-      gdb genromfs git gz-harmonic gstreamer1.0-libav
-      gstreamer1.0-plugins-bad gstreamer1.0-plugins-base
-      gstreamer1.0-plugins-good gstreamer1.0-plugins-ugly
-      lcov libeigen3-dev libgstreamer-plugins-base1.0-dev
-      libimage-exiftool-perl libopencv-dev libssl-dev libxml2-dev
-      libxml2-utils make ninja-build pkg-config protobuf-compiler
-      python3 python3-dev python3-pip python3-setuptools python3-wheel
-      ros-jazzy-ros2pkg rsync shellcheck unzip zip
-    )
-    missing_packages=()
-    for package in "${required_packages[@]}"; do
-      if ! dpkg-query -W -f="\${db:Status-Abbrev}" "${package}" 2>/dev/null \
-          | grep -q "^ii"; then
-        missing_packages+=("${package}")
-      fi
-    done
-    if (( ${#missing_packages[@]} > 0 )); then
-      printf "XGC2 build image is missing PX4 package: %s\n" \
-        "${missing_packages[@]}" >&2
-      exit 1
-    fi
-    required_python_modules=(
-      argcomplete cerberus coverage em future genmsg jinja2 jsonschema
-      kconfiglib lxml matplotlib nunavut numpy packaging pandas pkgconfig
-      psutil pygments pymavlink pyulog requests serial setuptools six sympy
-      toml yaml Crypto
-    )
-    missing_python_modules=()
-    for module in "${required_python_modules[@]}"; do
-      if ! python3 -c "import ${module}" >/dev/null 2>&1; then
-        missing_python_modules+=("${module}")
-      fi
-    done
-    if (( ${#missing_python_modules[@]} > 0 )); then
-      printf "XGC2 build image is missing PX4 Python module: %s\n" \
-        "${missing_python_modules[@]}" >&2
-      exit 1
-    fi
+    # PX4 is an upstream-integration product. Keep the XGC2 base image, then
+    # let the pinned PX4 source prepare the additional build-only dependencies
+    # it requires inside this disposable container.
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends \
+      bc \
+      ca-certificates \
+      ccache \
+      cmake \
+      curl \
+      dpkg-dev \
+      file \
+      g++ \
+      gcc \
+      genromfs \
+      git \
+      gnupg \
+      libxslt1-dev \
+      libxml2-dev \
+      lsb-release \
+      make \
+      ninja-build \
+      python3 \
+      python3-dev \
+      python3-empy \
+      python3-jinja2 \
+      python3-numpy \
+      python3-packaging \
+      python3-pip \
+      python3-setuptools \
+      python3-toml \
+      python3-wheel \
+      python3-yaml \
+      ros-jazzy-ros2pkg \
+      rsync \
+      sudo \
+      unzip \
+      wget \
+      zip
 
     cd /workspace/px4_sitl_runtime
     PX4_DIR="$(.xgc2/scripts/fetch_px4.sh --work-dir /workspace/work)"
+
+    if [[ -x "${PX4_DIR}/Tools/setup/ubuntu.sh" ]]; then
+      bash "${PX4_DIR}/Tools/setup/ubuntu.sh" --no-nuttx
+    fi
 
     .xgc2/scripts/build_px4_runtime.sh --px4-dir "${PX4_DIR}"
     .xgc2/scripts/extract_px4_runtime.sh --px4-dir "${PX4_DIR}" --output-dir /workspace/work/runtime-stage
