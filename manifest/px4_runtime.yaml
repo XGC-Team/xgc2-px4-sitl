@@ -16,4 +16,4 @@ build_target: px4_sitl_default
 px4_cmake_build_type: RelWithDebInfo
 optimization_level: O3
 gazebo_build_target: sitl_gazebo-classic
-docker_image: ros:noetic-ros-base-focal
+docker_image: ghcr.io/xgc-team/xgc2-images/xgc2-build-focal-full-noetic:1.0.0
