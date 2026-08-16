@@ -59,8 +59,7 @@ docker run --rm \
     set -euo pipefail
 
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update
-    apt-get install -y --no-install-recommends \
+    if ! dpkg-query -W \
       bc \
       ca-certificates \
       ccache \
@@ -106,14 +105,13 @@ docker run --rm \
       sudo \
       unzip \
       wget \
-      zip
+      zip >/dev/null; then
+      echo "XGC2 full Noetic build image is missing a required PX4 build package" >&2
+      exit 1
+    fi
 
     cd /workspace/px4_sitl
     PX4_DIR="$(.xgc2/scripts/fetch_px4.sh --work-dir /workspace/work)"
-
-    if [[ -x "${PX4_DIR}/Tools/setup/ubuntu.sh" ]]; then
-      bash "${PX4_DIR}/Tools/setup/ubuntu.sh" --no-nuttx
-    fi
 
     .xgc2/scripts/build_px4_runtime.sh --px4-dir "${PX4_DIR}"
     .xgc2/scripts/extract_px4_runtime.sh --px4-dir "${PX4_DIR}" --output-dir /workspace/work/runtime-stage
