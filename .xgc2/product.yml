@@ -1,7 +1,7 @@
 schema: xgc2.product.v1
 id: xgc2-px4-sitl-116
 name: XGC2 PX4 SITL 1.16
-version: 1.16.2-14
+version: 1.16.2-15
 kind: ros2-apt
 summary: PX4 v1.16 SITL runtime and Gazebo Sim Harmonic assets for ROS Jazzy.
 ros:
@@ -43,4 +43,4 @@ release:
   ref: v1.16-jazzy
   workflow: release.yml
   apt_versions:
-    noble: 1.16.2-14
+    noble: 1.16.2-15
