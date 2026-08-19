@@ -6,6 +6,11 @@ The orchestrator previously forked three Python processes per robot
 process now performs the whole sequence, so each robot costs one interpreter
 start instead of three.
 
+gzserver dispatches every /gazebo/spawn_* call on one callback thread.
+Overlapping inserts often return success and then drop the model, so this
+helper holds an exclusive flock across delete/spawn/verify, retries a silent
+drop, and shares the lock file with Mecanum's gazebo_ros spawn_model prefix.
+
 Exit codes:
   0  the model was spawned and is visible in Gazebo
   4  the model already exists and --existing-model-policy is "fail"
@@ -13,6 +18,7 @@ Exit codes:
   1  any other failure (transient: Gazebo or ROS may still be starting)
 """
 import argparse
+import fcntl
 import json
 import math
 import sys
@@ -28,6 +34,10 @@ EXIT_MODEL_EXISTS = 4
 SERVICE_WAIT_SECONDS = 30.0
 DELETE_WAIT_SECONDS = 5.0
 VERIFY_WAIT_SECONDS = 10.0
+SPAWN_ATTEMPTS = 4
+SPAWN_RETRY_SECONDS = 0.5
+SETTLE_SECONDS = 0.4
+GAZEBO_SPAWN_LOCK_PATH = "/tmp/xgc2-gazebo-spawn.lock"
 
 
 def _set_plugin_tag(plugin, tag, value):
@@ -68,6 +78,17 @@ def service_proxy(name, service_type):
     return rospy.ServiceProxy(name, service_type)
 
 
+def acquire_gazebo_spawn_lock():
+    """Serialize /gazebo/spawn_* against one gzserver.
+
+    Job workers and SITL instances stay parallel. The lock file is the same
+    path Mecanum launch-prefix flock(1) uses, so UAV and UGV inserts queue.
+    """
+    handle = open(GAZEBO_SPAWN_LOCK_PATH, "a+")
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    return handle
+
+
 def model_exists(get_model_state, model):
     return bool(get_model_state(model, "world").success)
 
@@ -80,6 +101,45 @@ def wait_for_model(get_model_state, model, present, deadline_seconds):
         if time.monotonic() >= deadline:
             return False
         time.sleep(0.1)
+
+
+def spawn_until_visible(spawn, get_model_state, args, sdf, pose):
+    last_message = ""
+    for attempt in range(1, SPAWN_ATTEMPTS + 1):
+        if model_exists(get_model_state, args.model):
+            return
+        result = spawn(args.model, sdf, "", pose, "world")
+        last_message = result.status_message
+        if result.success and wait_for_model(
+            get_model_state, args.model, True, VERIFY_WAIT_SECONDS
+        ):
+            time.sleep(SETTLE_SECONDS)
+            rospy.loginfo("SpawnModel: %s", result.status_message)
+            return
+        if not result.success:
+            if args.existing_model_policy == "fail" and model_exists(
+                get_model_state, args.model
+            ):
+                rospy.logerr("model %s already exists", args.model)
+                raise SystemExit(EXIT_MODEL_EXISTS)
+            rospy.logwarn(
+                "SpawnModel attempt %s failed: %s", attempt, result.status_message
+            )
+        else:
+            rospy.logwarn(
+                "Gazebo did not report model %s after spawn attempt %s",
+                args.model,
+                attempt,
+            )
+        if attempt < SPAWN_ATTEMPTS:
+            time.sleep(SPAWN_RETRY_SECONDS)
+    rospy.logerr(
+        "Gazebo did not keep model %s after %s spawn attempts (%s)",
+        args.model,
+        SPAWN_ATTEMPTS,
+        last_message,
+    )
+    raise SystemExit(EXIT_TRANSIENT)
 
 
 def main():
@@ -120,38 +180,29 @@ def main():
     pose.orientation.z = qz
     pose.orientation.w = qw
 
-    get_model_state = service_proxy("/gazebo/get_model_state", GetModelState)
-    replaced = False
-    if args.existing_model_policy == "replace" and model_exists(
-        get_model_state, args.model
-    ):
-        delete_model = service_proxy("/gazebo/delete_model", DeleteModel)
-        result = delete_model(args.model)
-        if not result.success:
-            rospy.logerr("DeleteModel failed: %s", result.status_message)
-            raise SystemExit(EXIT_TRANSIENT)
-        if not wait_for_model(get_model_state, args.model, False, DELETE_WAIT_SECONDS):
-            rospy.logerr("model %s still exists after delete_model", args.model)
-            raise SystemExit(EXIT_TRANSIENT)
-        replaced = True
-
-    spawn = service_proxy("/gazebo/spawn_sdf_model", SpawnModel)
-    result = spawn(args.model, sdf, "", pose, "world")
-    if not result.success:
-        # The fail policy skips the preflight, so an existing model surfaces
-        # here; distinguish it from transient Gazebo errors for the caller.
-        if args.existing_model_policy == "fail" and model_exists(
+    lock = acquire_gazebo_spawn_lock()
+    try:
+        get_model_state = service_proxy("/gazebo/get_model_state", GetModelState)
+        replaced = False
+        if args.existing_model_policy == "replace" and model_exists(
             get_model_state, args.model
         ):
-            rospy.logerr("model %s already exists", args.model)
-            raise SystemExit(EXIT_MODEL_EXISTS)
-        rospy.logerr("SpawnModel failed: %s", result.status_message)
-        raise SystemExit(EXIT_TRANSIENT)
-    if not wait_for_model(get_model_state, args.model, True, VERIFY_WAIT_SECONDS):
-        rospy.logerr("Gazebo did not report model %s after spawn", args.model)
-        raise SystemExit(EXIT_TRANSIENT)
-    rospy.loginfo("SpawnModel: %s", result.status_message)
-    print("SPAWN_SDF_RESULT " + json.dumps({"replaced": replaced}), flush=True)
+            delete_model = service_proxy("/gazebo/delete_model", DeleteModel)
+            result = delete_model(args.model)
+            if not result.success:
+                rospy.logerr("DeleteModel failed: %s", result.status_message)
+                raise SystemExit(EXIT_TRANSIENT)
+            if not wait_for_model(get_model_state, args.model, False, DELETE_WAIT_SECONDS):
+                rospy.logerr("model %s still exists after delete_model", args.model)
+                raise SystemExit(EXIT_TRANSIENT)
+            replaced = True
+
+        spawn = service_proxy("/gazebo/spawn_sdf_model", SpawnModel)
+        spawn_until_visible(spawn, get_model_state, args, sdf, pose)
+        print("SPAWN_SDF_RESULT " + json.dumps({"replaced": replaced}), flush=True)
+    finally:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+        lock.close()
 
 
 if __name__ == "__main__":
