@@ -156,7 +156,7 @@ until grep -q "Startup script returned successfully" "${LOG_DIR}/px4.log"; do
   sleep 1
 done
 
-roslaunch mavros px4.launch fcu_url:=udp://:14540@localhost:14557 gcs_url:= >"${LOG_DIR}/mavros.log" 2>&1 &
+roslaunch mavros px4.launch fcu_url:=udp://:15000@localhost:15300 gcs_url:= >"${LOG_DIR}/mavros.log" 2>&1 &
 PIDS+=("$!")
 
 deadline=$((SECONDS + TIMEOUT_S))

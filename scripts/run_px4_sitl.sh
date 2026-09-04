@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_ROOT="${PX4_SITL_RUNTIME_ROOT:-/opt/ros/noetic/share/px4_sitl_1_12/runtime}"
 WORK_DIR="${PX4_SITL_WORK_DIR:-/tmp/px4_sitl/uav1}"
 INSTANCE="0"
@@ -55,7 +56,13 @@ done
 
 PX4_BIN="${RUNTIME_ROOT}/bin/px4"
 PX4_ETC="${RUNTIME_ROOT}/etc"
-PX4_MAVLINK_SCRIPT="${RUNTIME_ROOT}/etc/init.d-posix/px4-rc.mavlink"
+PX4_MAVLINK_SCRIPT="${PX4_SITL_MAVLINK_SCRIPT:-}"
+if [[ -z "${PX4_MAVLINK_SCRIPT}" ]]; then
+  PX4_MAVLINK_SCRIPT="$(dirname "${RUNTIME_ROOT}")/config/px4-rc.mavlink"
+  if [[ ! -f "${PX4_MAVLINK_SCRIPT}" ]]; then
+    PX4_MAVLINK_SCRIPT="${SCRIPT_DIR}/../config/px4-rc.mavlink"
+  fi
+fi
 
 if [[ ! -x "${PX4_BIN}" ]]; then
   echo "PX4 binary is missing or not executable: ${PX4_BIN}" >&2
@@ -75,6 +82,11 @@ fi
 
 if [[ ! -f "${STARTUP_SCRIPT_PATH}" ]]; then
   echo "PX4 startup script is missing: ${STARTUP_SCRIPT_PATH}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${PX4_MAVLINK_SCRIPT}" ]]; then
+  echo "XGC PX4 MAVLink port script is missing: ${PX4_MAVLINK_SCRIPT}" >&2
   exit 1
 fi
 
@@ -100,9 +112,7 @@ if [[ "${RESET_PARAMS}" == "true" ]]; then
   rm -f parameters.bson parameters_backup.bson param_import_fail.bson px4-rc.params px4-rc.mavlink
 fi
 
-if [[ -f "${PX4_MAVLINK_SCRIPT}" ]]; then
-  install -m 0644 "${PX4_MAVLINK_SCRIPT}" px4-rc.mavlink
-fi
+install -m 0644 "${PX4_MAVLINK_SCRIPT}" px4-rc.mavlink
 
 if [[ -n "${PARAM_BSON}" ]]; then
   if [[ ! -f "${PARAM_BSON}" ]]; then

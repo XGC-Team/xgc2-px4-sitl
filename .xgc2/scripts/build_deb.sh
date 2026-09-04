@@ -159,6 +159,7 @@ remove_packaged_path "${runtime_root}" "${GAZEBO_PLUGIN_PREFIX}"
 install -m 0755 "${REPO_ROOT}/scripts/run_px4_sitl.sh" "${runtime_lib}/run_px4_sitl.sh"
 install -m 0755 "${REPO_ROOT}/scripts/setup_runtime_env.sh" "${runtime_lib}/setup_runtime_env.sh"
 install -m 0644 "${REPO_ROOT}/config/runtime.env" "${runtime_share}/config/runtime.env"
+install -m 0644 "${REPO_ROOT}/config/px4-rc.mavlink" "${runtime_share}/config/px4-rc.mavlink"
 
 cat > "${runtime_share}/package.xml" <<EOF_XML
 <?xml version="1.0"?>
